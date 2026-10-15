@@ -1,0 +1,270 @@
+<%#
+ Copyright 2026 luci-app-nxdb
+ IPK 插件扫描 / 逆向打包页面 (经典 LuCI, 原生 XHR, 无外部 JS 依赖)
+-%>
+<%+header%>
+
+<%-
+	local dispatcher = require "luci.dispatcher"
+	local u = function(...) return dispatcher.build_url("admin", "system", "nxdb", ...) end
+-%>
+
+<style type="text/css">
+	.nxdb-wrap { max-width: 1100px; }
+	.nxdb-bar { margin: 8px 0; }
+	.nxdb-bar input[type=text] { padding: 4px 6px; }
+	#nxdb-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+	#nxdb-tbl th, #nxdb-tbl td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; }
+	#nxdb-tbl th { background: #f4f4f4; position: sticky; top: 0; }
+	#nxdb-tbl tr.miss td { color: #c0392b; }
+	#nxdb-tbl tr:nth-child(even) { background: #fafafa; }
+	#nxdb-tbl td.num, #nxdb-tbl th.num { text-align: center; width: 60px; }
+	#nxdb-tbl td.pkg { font-family: Consolas, monospace; }
+	.nxdb-tablewrap { max-height: 420px; overflow: auto; border: 1px solid #ccc; }
+	.nxdb-prog-bg { width: 100%; height: 18px; background: #e8e8e8; border: 1px solid #bbb; border-radius: 3px; }
+	.nxdb-prog-fg { height: 100%; width: 0; background: #4a90d9; transition: width .2s; }
+	#nxdb-log { width: 100%; height: 130px; box-sizing: border-box; font-family: Consolas, monospace;
+	            font-size: 12px; background: #1e1e1e; color: #d4d4d4; padding: 6px; overflow: auto; white-space: pre-wrap; }
+	.nxdb-files span { display: inline-block; margin: 2px 8px 2px 0; }
+	.cbi-section h2 { margin-top: 18px; }
+	#nxdb-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 999; }
+	#nxdb-modal .box { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+	                   width: 720px; max-width: 92%; max-height: 80%; background: #fff; border-radius: 6px;
+	                   display: flex; flex-direction: column; }
+	#nxdb-modal .hd { padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #ddd; }
+	#nxdb-modal .bd { padding: 8px 14px; overflow: auto; }
+	#nxdb-modal table { width: 100%; font-size: 12px; border-collapse: collapse; }
+	#nxdb-modal td { border-bottom: 1px dotted #eee; padding: 2px 4px; }
+	#nxdb-modal .ft { padding: 8px 14px; border-top: 1px solid #ddd; text-align: right; }
+	.st-L { color: #1a6fb0; } .st-M { color: #c0392b; } .st-D { color: #888; }
+</style>
+
+<div class="nxdb-wrap">
+	<h2 name="content">IPK 插件扫描 / 逆向打包 <small style="font-size:12px;color:#888">luci-app-nxdb</small></h2>
+
+	<div class="cbi-section">
+		<div class="nxdb-bar">
+			<label>输出目录:
+				<input type="text" id="nxdb-out" value="/tmp/nxdb_ipk" style="width:260px" />
+			</label>
+			<span style="color:#999;font-size:12px"> (建议 /tmp(nxdb_ipk)；如需掉电保留用 /root 或挂载盘)</span>
+		</div>
+		<div class="nxdb-bar">
+			<input type="button" class="cbi-button cbi-button-action" id="nxdb-scan" value="重新扫描" />
+			<input type="button" class="cbi-button cbi-button-apply"  id="nxdb-pack" value="打包选中插件" />
+			<input type="button" class="cbi-button cbi-button-reset" id="nxdb-cancel" value="停止任务" disabled />
+			<span style="margin-left:18px">
+				<a href="javascript:void(0)" id="nxdb-all">全选</a> |
+				<a href="javascript:void(0)" id="nxdb-none">全不选</a> |
+				<a href="javascript:void(0)" id="nxdb-invert">反选</a>
+			</span>
+			<input type="text" id="nxdb-search" placeholder="按包名/分类过滤…" style="width:170px;margin-left:14px" />
+			<label style="margin-left:8px"><input type="checkbox" id="nxdb-miss" /> 仅有缺失</label>
+			<span id="nxdb-stat" style="margin-left:14px;color:#27ae60;font-weight:bold"></span>
+		</div>
+
+		<div class="nxdb-tablewrap">
+			<table id="nxdb-tbl">
+				<thead><tr>
+					<th class="num"><input type="checkbox" id="nxdb-chk-all" /></th>
+					<th>包名 Package</th><th>版本 Version</th><th>架构 Arch</th>
+					<th>分类 Section</th><th class="num">文件</th><th class="num">链接</th>
+					<th class="num">缺失</th>
+				</tr></thead>
+				<tbody id="nxdb-body"></tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="cbi-section">
+		<h2>任务进度</h2>
+		<div class="nxdb-prog-bg"><div class="nxdb-prog-fg" id="nxdb-prog"></div></div>
+		<div id="nxdb-prog-txt" style="margin:4px 0;font-size:12px">就绪</div>
+		<div id="nxdb-log"></div>
+	</div>
+
+	<div class="cbi-section">
+		<h2>已生成 IPK <span style="font-size:12px;color:#888">(单击文件名下载, opkg install 即可安装)</span></h2>
+		<div class="nxdb-files" id="nxdb-files" style="font-size:12px"></div>
+	</div>
+</div>
+
+<div id="nxdb-modal">
+	<div class="box">
+		<div class="hd" id="nxdb-modal-title">文件清单</div>
+		<div class="bd"><table id="nxdb-modal-body"></table></div>
+		<div class="ft"><input type="button" class="cbi-button" value="关闭"
+			onclick="document.getElementById('nxdb-modal').style.display='none'" /></div>
+	</div>
+</div>
+
+<script type="text/javascript">
+(function () {
+	var URL = {
+		data: '<%=u("data")%>',
+		files: '<%=u("files")%>',
+		pack: '<%=u("pack")%>',
+		cancel: '<%=u("cancel")%>',
+		status: '<%=u("status")%>',
+		download: '<%=u("download")%>'
+	};
+	var rows = [], timer = null;
+
+	function $(id) { return document.getElementById(id); }
+	function xhr(url, cb) {
+		var r = new XMLHttpRequest();
+		r.open("GET", url, true);
+		r.onreadystatechange = function () {
+			if (r.readyState !== 4) return;
+			try { cb(JSON.parse(r.responseText)); }
+			catch (e) { cb({ ok: false, error: "返回解析失败: " + r.responseText.slice(0, 120) }); }
+		};
+		r.send(null);
+	}
+	function esc(s) {
+		return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+			return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+		});
+	}
+
+	function render() {
+		var kw = $("nxdb-search").value.toLowerCase(),
+		    onlyMiss = $("nxdb-miss").checked,
+		    body = $("nxdb-body"), sel = 0, html = "";
+		for (var i = 0; i < rows.length; i++) {
+			var r = rows[i];
+			if (kw && r.pkg.toLowerCase().indexOf(kw) < 0 && r.sec.toLowerCase().indexOf(kw) < 0) continue;
+			if (onlyMiss && !r.missing) continue;
+			if (r._sel) sel++;
+			html += '<tr class="' + (r.missing ? "miss" : "") + '">' +
+				'<td class="num"><input type="checkbox" data-i="' + i + '" ' + (r._sel ? "checked" : "") +
+				' class="nxdb-chk"/></td>' +
+				'<td class="pkg"><a href="javascript:void(0)" class="nxdb-detail" data-pkg="' +
+				esc(r.pkg) + '" title="双击或点击查看文件清单">' + esc(r.pkg) + '</a></td>' +
+				'<td>' + esc(r.ver) + '</td><td>' + esc(r.arch) + '</td>' +
+				'<td>' + esc(r.sec) + '</td>' +
+				'<td class="num">' + r.files + '</td><td class="num">' + r.links + '</td>' +
+				'<td class="num">' + (r.missing ? r.missing : "") + '</td></tr>';
+		}
+		body.innerHTML = html;
+		var totalMiss = 0, missPkgs = 0;
+		for (var j = 0; j < rows.length; j++) {
+			if (rows[j].missing) { missPkgs++; totalMiss += rows[j].missing; }
+		}
+		$("nxdb-stat").textContent = "共 " + rows.length + " 个包 | 已选 " + sel +
+			" | " + missPkgs + " 个包存在缺失(共 " + totalMiss + " 项, 多为未编入 rootfs 的 .ko)";
+		$("nxdb-chk-all").checked = (sel === rows.length && rows.length > 0);
+	}
+
+	function scan() {
+		$("nxdb-stat").textContent = "扫描中…";
+		xhr(URL.data, function (d) {
+			if (!d.ok) { $("nxdb-stat").textContent = "扫描失败: " + (d.error || ""); return; }
+			var oldSel = {};
+			rows.forEach(function (r) { oldSel[r.pkg] = r._sel; });
+			rows = d.rows.map(function (r) {
+				r._sel = (oldSel[r.pkg] !== undefined) ? oldSel[r.pkg] : true;
+				return r;
+			});
+			render();
+		});
+	}
+
+	function setRunning(on) {
+		$("nxdb-pack").disabled = on;
+		$("nxdb-cancel").disabled = !on;
+	}
+
+	function refreshStatus() {
+		xhr(URL.status + "?out=" + encodeURIComponent($("nxdb-out").value), function (d) {
+			if (!d.ok) return;
+			var n = d.n || 0, i = d.i || 0;
+			$("nxdb-prog").style.width = (n ? Math.round(i * 100 / n) : 0) + "%";
+			if (d.running) {
+				$("nxdb-prog-txt").textContent = "打包中 " + i + "/" + n + " : " + d.pkg;
+				setRunning(true);
+			} else if (d.done) {
+				$("nxdb-prog-txt").textContent = "任务完成, 共 " + n + " 个包";
+				setRunning(false);
+				if (timer) { clearInterval(timer); timer = null; }
+			} else {
+				$("nxdb-prog-txt").textContent = "就绪";
+				setRunning(false);
+			}
+			$("nxdb-log").textContent = d.report || "";
+			$("nxdb-log").scrollTop = $("nxdb-log").scrollHeight;
+			var fh = "";
+			(d.files || []).forEach(function (f) {
+				fh += '<span><a href="' + URL.download + "?out=" +
+					encodeURIComponent($("nxdb-out").value) + "&name=" + encodeURIComponent(f.name) +
+					'">' + esc(f.name) + '</a> (' + Math.round(f.size / 102.4) / 10 + ' KB)</span>';
+			});
+			$("nxdb-files").innerHTML = fh || '<span style="color:#999">暂无</span>';
+		});
+	}
+
+	// 事件绑定
+	$("nxdb-scan").onclick = scan;
+	$("nxdb-search").oninput = render;
+	$("nxdb-miss").onchange = render;
+	$("nxdb-all").onclick = function () { rows.forEach(function (r) { r._sel = true; }); render(); };
+	$("nxdb-none").onclick = function () { rows.forEach(function (r) { r._sel = false; }); render(); };
+	$("nxdb-invert").onclick = function () { rows.forEach(function (r) { r._sel = !r._sel; }); render(); };
+	$("nxdb-chk-all").onchange = function () {
+		var v = this.checked;
+		rows.forEach(function (r) { r._sel = v; }); render();
+	};
+	$("nxdb-body").onclick = function (ev) {
+		var t = ev.target;
+		if (t.className === "nxdb-chk") {
+			var idx = +t.getAttribute("data-i");
+			rows[idx]._sel = t.checked; render();
+		} else if (t.className === "nxdb-detail") {
+			showDetail(t.getAttribute("data-pkg"));
+		}
+	};
+	$("nxdb-body").ondblclick = function (ev) {
+		var tr = ev.target.parentNode, a = tr.querySelector(".nxdb-detail");
+		if (a) showDetail(a.getAttribute("data-pkg"));
+	};
+	$("nxdb-pack").onclick = function () {
+		var pkgs = rows.filter(function (r) { return r._sel; }).map(function (r) { return r.pkg; });
+		if (!pkgs.length) { alert("请先勾选至少一个插件"); return; }
+		if (!confirm("确定打包 " + pkgs.length + " 个插件到:\n" + $("nxdb-out").value + " ?")) return;
+		xhr(URL.pack + "?out=" + encodeURIComponent($("nxdb-out").value) +
+			"&pkgs=" + encodeURIComponent(pkgs.join(",")), function (d) {
+			if (!d.ok) { alert(d.error || "启动失败"); return; }
+			if (!timer) timer = setInterval(refreshStatus, 1000);
+			refreshStatus();
+		});
+	};
+	$("nxdb-cancel").onclick = function () {
+		xhr(URL.cancel, function () { refreshStatus(); });
+	};
+
+	function showDetail(pkg) {
+		$("nxdb-modal-title").textContent = "文件清单 - " + pkg;
+		$("nxdb-modal-body").innerHTML = '<tr><td>加载中…</td></tr>';
+		$("nxdb-modal").style.display = "block";
+		xhr(URL.files + "?pkg=" + encodeURIComponent(pkg), function (d) {
+			if (!d.ok || !d.rows.length) {
+				$("nxdb-modal-body").innerHTML = '<tr><td>无 list 信息</td></tr>';
+				return;
+			}
+			var h = "";
+			d.rows.forEach(function (r) {
+				h += '<tr><td class="st-' + r.st + '">' + esc(r.path) +
+					(r.st === "L" ? ' -&gt; ' + esc(r.target) : "") +
+					'</td><td style="width:70px" class="st-' + r.st + '">' + r.label + '</td></tr>';
+			});
+			$("nxdb-modal-body").innerHTML = h;
+		});
+	}
+
+	scan();
+	refreshStatus();
+	timer = setInterval(refreshStatus, 3000);
+})();
+</script>
+
+<%+footer%>

@@ -1,0 +1,7 @@
+*.sh text eol=lf
+*.lua text eol=lf
+*.htm text eol=lf
+*.md text eol=lf
+Makefile text eol=lf
+luci-app-panel text eol=lf
+panel text eol=lf

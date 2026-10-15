@@ -1,0 +1,38 @@
+#!/bin/sh
+# luci-app-panel 出厂初始化 (幂等: uci-defaults 可能在每次安装/sysupgrade 后重复执行)
+#  1. 确保 general 节存在
+#  2. 仅在没有任何 device 节时写入出厂设备, 避免重复执行产生重复条目
+#  3. 清 LuCI 缓存并重载 rpcd (与 luci.mk 默认 postinst 等价, 亦覆盖手工安装/sysupgrade 场景)
+
+# general 节
+if ! uci -q get panel.general >/dev/null 2>&1; then
+	uci set panel.general=panel
+	uci set panel.general.sidebar_collapsed='0'
+fi
+
+# 已存在任意 device 节则不重复播种
+dev_count=$(uci -q show panel 2>/dev/null | grep -c '=device$')
+if [ "${dev_count:-0}" -eq 0 ]; then
+	uci add panel device >/dev/null
+	uci set panel.@device[-1].label='5G壳-80端口'
+	uci set panel.@device[-1].address='192.168.66.1'
+	uci set panel.@device[-1].port='80'
+
+	uci add panel device >/dev/null
+	uci set panel.@device[-1].label='5G壳-6677端口'
+	uci set panel.@device[-1].address='192.168.66.1'
+	uci set panel.@device[-1].port='6677'
+
+	uci add panel device >/dev/null
+	uci set panel.@device[-1].label='5G壳-9527端口'
+	uci set panel.@device[-1].address='192.168.66.1'
+	uci set panel.@device[-1].port='9527'
+fi
+
+uci commit panel
+
+rm -f /tmp/luci-indexcache /tmp/luci-indexcache.gz /tmp/luci-indexcache.* 2>/dev/null
+rm -rf /tmp/luci-modulecache 2>/dev/null
+/etc/init.d/rpcd reload 2>/dev/null
+
+exit 0

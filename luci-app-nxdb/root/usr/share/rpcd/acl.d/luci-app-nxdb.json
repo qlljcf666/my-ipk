@@ -1,0 +1,19 @@
+{
+	"luci-app-nxdb": {
+		"description": "Grant access to IPK plugin scanner and reverse packing tool",
+		"read": {
+			"file": {
+				"/usr/lib/opkg/info": [ "listDirectory", "read", "stat", "readLink" ],
+				"/tmp/nxdb_state": [ "read", "stat" ],
+				"/tmp/nxdb_last.log": [ "read", "stat" ]
+			}
+		},
+		"write": {
+			"file": {
+				"/tmp/nxdb_state": [ "write" ],
+				"/tmp/nxdb_last.log": [ "write" ],
+				"/tmp/": [ "create-directory", "remove-directory" ]
+			}
+		}
+	}
+}

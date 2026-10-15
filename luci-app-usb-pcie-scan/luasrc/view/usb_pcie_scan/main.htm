@@ -1,0 +1,241 @@
+<%+header%>
+<%
+	local dsp = luci.dispatcher
+	local url_scan    = dsp.build_url("admin/system/usb_pcie_scan/scan")
+	local url_bind    = dsp.build_url("admin/system/usb_pcie_scan/bind")
+	local url_rclocal = dsp.build_url("admin/system/usb_pcie_scan/rclocal")
+%>
+
+<style>
+.ups-tabs { display:flex; gap:6px; margin-bottom:10px; }
+.ups-tab { padding:6px 18px; cursor:pointer; border:1px solid #ccc; border-radius:4px 4px 0 0; background:#f5f5f5; }
+.ups-tab.active { background:#fff; border-bottom-color:#fff; font-weight:bold; }
+.ups-panel { border:1px solid #ccc; border-radius:0 4px 4px 4px; padding:10px; }
+.ups-pre { background:#1e1e1e; color:#d4d4d4; padding:8px; border-radius:4px; overflow:auto;
+	max-height:340px; font-family:Consolas,monospace; font-size:12px; white-space:pre; }
+.ups-blk { margin-bottom:14px; }
+.ups-blk h4 { margin:6px 0; }
+.ups-bind-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 0; border-bottom:1px dashed #ddd; }
+.ups-bind-row code { flex:1 1 100%; font-size:12px; color:#333; word-break:break-all; }
+.ups-msg { margin-top:8px; padding:6px 10px; border-radius:4px; display:none; }
+.ups-msg.ok  { display:block; background:#e6f4ea; color:#1e7e34; }
+.ups-msg.err { display:block; background:#fdecea; color:#c62828; }
+.ups-io { width:90px; }
+</style>
+
+<h2><%:USB/PCIe 设备扫描%></h2>
+
+<div class="ups-tabs">
+	<div class="ups-tab active" id="tab_usb"  onclick="upsTab('usb')"><%:USB 设备%></div>
+	<div class="ups-tab"        id="tab_pcie" onclick="upsTab('pcie')"><%:PCIe 设备%></div>
+</div>
+
+<!-- ==================== USB ==================== -->
+<div class="ups-panel" id="panel_usb">
+
+	<div class="ups-blk">
+		<h4><%:驱动临时挂载 / 开机自启%></h4>
+		<div>
+			VID: <input type="text" id="ups_vid" class="ups-io" placeholder="585f" />
+			PID: <input type="text" id="ups_pid" class="ups-io" placeholder="0551" />
+			<button type="button" onclick="upsFromLsusb()"><%:从 lsusb 提取%></button>
+			<select id="ups_devs" style="display:none;max-width:420px" onchange="upsPick()"></select>
+		</div>
+		<div id="ups_bind_rows"></div>
+		<div class="ups-msg" id="ups_msg"></div>
+	</div>
+
+	<div class="ups-blk">
+		<h4>lsusb — <%:硬件识别%></h4>
+		<button type="button" onclick="upsScan()"><%:刷新全部%></button>
+		<pre class="ups-pre" id="pre_lsusb"><%:点击“刷新全部”加载…%></pre>
+	</div>
+	<div class="ups-blk">
+		<h4>lsusb -t — <%:设备树 / 驱动挂载%></h4>
+		<pre class="ups-pre" id="pre_lsusb_t"></pre>
+	</div>
+	<div class="ups-blk">
+		<h4>lsusb -v — <%:设备详细信息%></h4>
+		<pre class="ups-pre" id="pre_lsusb_v"></pre>
+	</div>
+	<div class="ups-blk">
+		<h4>/sys/kernel/debug/usb/devices — <%:内核调试视图（驱动挂载情况）%></h4>
+		<pre class="ups-pre" id="pre_debug"></pre>
+	</div>
+</div>
+
+<!-- ==================== PCIe ==================== -->
+<div class="ups-panel" id="panel_pcie" style="display:none">
+	<div class="ups-blk">
+		<h4>lspci — <%:硬件识别%></h4>
+		<button type="button" onclick="upsScanPcie()"><%:刷新全部%></button>
+		<pre class="ups-pre" id="pre_lspci"><%:点击“刷新全部”加载…%></pre>
+	</div>
+	<div class="ups-blk">
+		<h4>lspci -v — <%:设备详细信息%></h4>
+		<pre class="ups-pre" id="pre_lspci_v"></pre>
+	</div>
+	<div class="ups-blk">
+		<h4>lspci -t — <%:总线树 / 驱动挂载%></h4>
+		<pre class="ups-pre" id="pre_lspci_t"></pre>
+	</div>
+</div>
+
+<script>
+var URL_SCAN    = "<%=url_scan%>";
+var URL_BIND    = "<%=url_bind%>";
+var URL_RCLOCAL = "<%=url_rclocal%>";
+
+var DRIVERS = ["option", "option1", "option_1", "generic"];
+
+function upsTab(t) {
+	document.getElementById("panel_usb").style.display  = t === "usb"  ? "" : "none";
+	document.getElementById("panel_pcie").style.display = t === "pcie" ? "" : "none";
+	document.getElementById("tab_usb").className  = "ups-tab" + (t === "usb"  ? " active" : "");
+	document.getElementById("tab_pcie").className = "ups-tab" + (t === "pcie" ? " active" : "");
+}
+
+function upsPost(url, params, cb) {
+	var body = Object.keys(params).map(function (k) {
+		return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
+	}).join("&");
+	var x = new XMLHttpRequest();
+	x.open("POST", url, true);
+	x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+	x.onreadystatechange = function () {
+		if (x.readyState === 4) {
+			var d = null;
+			try { d = JSON.parse(x.responseText); } catch (e) {}
+			cb(d, x.status);
+		}
+	};
+	x.send(body);
+}
+
+function upsMsg(ok, text) {
+	var m = document.getElementById("ups_msg");
+	m.className = "ups-msg " + (ok ? "ok" : "err");
+	m.textContent = text;
+}
+
+function upsCmd(drv) {
+	var vid = document.getElementById("ups_vid").value.trim();
+	var pid = document.getElementById("ups_pid").value.trim();
+	return 'echo "' + vid + " " + pid + '" > /sys/bus/usb-serial/drivers/' + drv + "/new_id";
+}
+
+function upsBuildRows() {
+	var box = document.getElementById("ups_bind_rows");
+	box.innerHTML = "";
+	DRIVERS.forEach(function (drv) {
+		var row = document.createElement("div");
+		row.className = "ups-bind-row";
+
+		var code = document.createElement("code");
+		code.id = "cmd_" + drv;
+
+		var b1 = document.createElement("button");
+		b1.type = "button";
+		b1.textContent = "<%:临时挂载%> " + drv;
+		b1.onclick = function () { upsBind(drv); };
+
+		var b2 = document.createElement("button");
+		b2.type = "button";
+		b2.textContent = "<%:加入 rc.local%>";
+		b2.onclick = function () { upsRcAdd(drv); };
+
+		row.appendChild(code);
+		row.appendChild(b1);
+		row.appendChild(b2);
+		box.appendChild(row);
+	});
+	upsRefreshCmds();
+}
+
+function upsRefreshCmds() {
+	DRIVERS.forEach(function (drv) {
+		document.getElementById("cmd_" + drv).textContent = upsCmd(drv);
+	});
+}
+
+function upsBind(drv) {
+	var vid = document.getElementById("ups_vid").value.trim();
+	var pid = document.getElementById("ups_pid").value.trim();
+	if (!/^[0-9a-fA-F]+$/.test(vid) || !/^[0-9a-fA-F]+$/.test(pid)) {
+		upsMsg(false, "<%:请先填写十六进制 VID/PID%>");
+		return;
+	}
+	upsPost(URL_BIND, {vid: vid, pid: pid, driver: drv}, function (d) {
+		if (!d) { upsMsg(false, "<%:请求失败%>"); return; }
+		upsMsg(d.ok, d.cmd + "  —  " + (d.msg || ""));
+	});
+}
+
+function upsRcAdd(drv) {
+	upsPost(URL_RCLOCAL, {op: "add", cmd: upsCmd(drv)}, function (d) {
+		if (!d) { upsMsg(false, "<%:请求失败%>"); return; }
+		upsMsg(d.ok, d.msg || "");
+	});
+}
+
+function upsFromLsusb() {
+	var txt = document.getElementById("pre_lsusb").textContent;
+	var sel = document.getElementById("ups_devs");
+	sel.innerHTML = "";
+	var seen = {}, n = 0;
+	txt.split("\n").forEach(function (line) {
+		var m = line.match(/ID\s+([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\s*(.*)/);
+		if (m && !seen[m[1] + ":" + m[2]]) {
+			seen[m[1] + ":" + m[2]] = 1;
+			var o = document.createElement("option");
+			o.value = m[1] + " " + m[2];
+			o.textContent = m[1] + ":" + m[2] + (m[3] ? "  " + m[3] : "");
+			sel.appendChild(o);
+			n++;
+		}
+	});
+	if (n === 0) {
+		sel.style.display = "none";
+		upsMsg(false, "<%:lsusb 输出中未找到 ID，请先刷新 USB 列表%>");
+		return;
+	}
+	sel.style.display = n > 1 ? "" : "none";
+	sel.selectedIndex = 0;
+	upsPick();
+}
+
+function upsPick() {
+	var sel = document.getElementById("ups_devs");
+	if (!sel.value) return;
+	var p = sel.value.split(" ");
+	document.getElementById("ups_vid").value = p[0];
+	document.getElementById("ups_pid").value = p[1];
+	upsRefreshCmds();
+}
+
+function upsScan() {
+	upsPost(URL_SCAN, {type: "usb"}, function (d) {
+		if (!d) return;
+		document.getElementById("pre_lsusb").textContent   = d.lsusb   || "(空)";
+		document.getElementById("pre_lsusb_t").textContent = d.lsusb_t || "(空)";
+		document.getElementById("pre_lsusb_v").textContent = d.lsusb_v || "(空)";
+		document.getElementById("pre_debug").textContent   = d.debug   || "(空)";
+	});
+}
+
+function upsScanPcie() {
+	upsPost(URL_SCAN, {type: "pcie"}, function (d) {
+		if (!d) return;
+		document.getElementById("pre_lspci").textContent   = d.lspci   || "(空)";
+		document.getElementById("pre_lspci_v").textContent = d.lspci_v || "(空)";
+		document.getElementById("pre_lspci_t").textContent = d.lspci_t || "(空)";
+	});
+}
+
+document.getElementById("ups_vid").addEventListener("input", upsRefreshCmds);
+document.getElementById("ups_pid").addEventListener("input", upsRefreshCmds);
+upsBuildRows();
+upsScan();
+</script>
+
+<%+footer%>

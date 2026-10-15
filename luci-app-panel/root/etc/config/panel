@@ -1,0 +1,3 @@
+
+config panel 'general'
+	option sidebar_collapsed '0'

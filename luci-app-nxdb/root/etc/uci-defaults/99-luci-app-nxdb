@@ -1,0 +1,9 @@
+#!/bin/sh
+# luci-app-nxdb 安装/升级后:
+#  1. 确保后端脚本可执行 (源码树经不同介质拷贝后 +x 位可能丢失)
+#  2. 清理 LuCI 索引/模块缓存, 使菜单立即可见
+# uci-defaults 脚本执行成功后会由系统自动删除, 不会残留。
+chmod 755 /usr/libexec/nxdb/nxdb.sh 2>/dev/null
+rm -f /tmp/luci-indexcache /tmp/luci-indexcache.gz 2>/dev/null
+rm -rf /tmp/luci-modulecache 2>/dev/null
+exit 0

@@ -1,0 +1,17 @@
+{
+	"luci-app-usb-pcie-scan": {
+		"description": "Grant access to USB/PCIe device scanner",
+		"read": {
+			"file": {
+				"/etc/rc.local": [ "read" ],
+				"/sys/kernel/debug/usb/devices": [ "read" ]
+			}
+		},
+		"write": {
+			"file": {
+				"/etc/rc.local": [ "write" ],
+				"/sys/bus/usb-serial/drivers/*/new_id": [ "write" ]
+			}
+		}
+	}
+}

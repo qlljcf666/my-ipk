@@ -1,0 +1,387 @@
+<%+header%>
+<title><%:Device Panel%></title>
+<style>
+.panel-root{font-family:"Helvetica Neue",Arial,sans-serif;color:#1a1a2e;padding:20px;min-height:60vh;box-sizing:border-box;display:flex;flex-direction:column}
+.panel-header{margin-bottom:16px}
+.panel-header h2{margin:0;font-size:18px;font-weight:600}
+.panel-header .sub{font-size:12px;color:#8892a0;margin-top:2px}
+.ptoggle{width:28px;height:28px;border-radius:6px;border:1.5px solid #e2e6ed;background:rgba(255,255,255,.85);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.ptoggle:hover{background:#f0f2f5}
+#panel-grid{display:grid;grid-template-columns:260px 1fr;gap:14px;align-items:stretch;height:calc(100vh - 265px);min-height:400px}
+#panel-sidebar{background:rgba(255,255,255,.85);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:14px;backdrop-filter:blur(8px);align-self:start}
+.stitle{display:flex;align-items:center;justify-content:space-between;margin:0 0 10px}
+.stitle span{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:#8892a0}
+.padd{width:20px;height:20px;border-radius:4px;border:none;background:#5e81ff;color:#fff;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+.padd:hover{background:#4a6fe0}
+.pcard{display:flex;align-items:center;padding:9px 10px;border-radius:8px;cursor:pointer;margin-bottom:5px;border:1.5px solid transparent}
+.pcard:hover{background:#f5f7ff}
+.pcard.on{background:#f0f4ff;border-color:#5e81ff}
+.picon{width:28px;height:28px;border-radius:6px;background:#eef1f8;display:flex;align-items:center;justify-content:center;margin-right:8px;font-size:13px;flex-shrink:0}
+.pcard.on .picon{background:#dde3ff}
+.pinfo{flex:1;min-width:0}
+.plbl{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.paddr{font-size:11px;color:#8892a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.pact{display:flex;gap:4px;margin-left:4px;opacity:0;transition:opacity .15s}
+.pcard:hover .pact{opacity:1}
+.pedit,.pdel{cursor:pointer;font-size:12px;padding:2px 4px;border-radius:3px}
+.pedit:hover{background:#e8ecff}
+.pdel:hover{background:#ffe8e8}
+.pdiv{height:1px;background:#f0f2f5;margin:10px 0}
+.igrp{margin-bottom:10px}
+.ilbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:#8892a0;margin-bottom:5px;display:block}
+.iput{width:100%;padding:7px 10px;border:1.5px solid #e2e6ed;border-radius:8px;font-size:13px;box-sizing:border-box;outline:none}
+.iput:focus{border-color:#5e81ff}
+.iput::placeholder{color:#b0b8c8}
+.panel-dark .iput::placeholder{color:#8892a0}
+.pmain{background:rgba(255,255,255,.85);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;display:flex;flex-direction:column;backdrop-filter:blur(8px);min-height:0}
+.ptool{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid rgba(0,0,0,.05);background:rgba(250,251,253,.7);flex-shrink:0}
+.turl{flex:1;min-width:0;padding:5px 10px;border-radius:6px;background:#f0f2f5;font-size:12px;font-family:monospace;color:#8892a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turl span{color:#5e81ff}
+.tbtn{width:28px;height:28px;border-radius:6px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+.tbtn:hover{background:#f0f2f5}
+.tbtn:disabled{opacity:.35;cursor:not-allowed}
+.iwrap{position:relative;flex:1;min-height:0}
+#panel-frame{width:100%;height:100%;border:none;display:block;background:#fff}
+.phold{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fafbfd;gap:12px}
+.phico{font-size:36px;opacity:.25}
+.phtxt{font-size:13px;color:#b0b8c8;text-align:center;max-width:240px;line-height:1.5}
+.pload{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.88);z-index:10;gap:8px;font-size:13px;color:#5e81ff}
+.pspin{width:18px;height:18px;border:2.5px solid #dde3ff;border-top-color:#5e81ff;border-radius:50%;animation:pSpin .7s linear infinite}
+@keyframes pSpin{to{transform:rotate(360deg)}}
+.perr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#fffaf8}
+.perri{font-size:28px}
+.perm{font-size:13px;color:#c0392b;text-align:center;max-width:280px}
+@media(max-width:700px){#panel-grid{grid-template-columns:1fr}#panel-sidebar{order:2}}
+.panel-dark{color:#d0d5dd}.panel-dark .panel-header .sub{color:#6b7280}.panel-dark .ptoggle{border-color:#3a4150;background:rgba(30,35,45,.85);color:#c8ccd4}.panel-dark .ptoggle:hover{background:#3a4150}.panel-dark #panel-sidebar{background:rgba(30,35,45,.88);border-color:#3a4150;box-shadow:0 1px 3px rgba(0,0,0,.25)}.panel-dark .stitle span{color:#6b7280}.panel-dark .padd{background:#4a6fe0}.panel-dark .padd:hover{background:#5e81ff}.panel-dark .pcard:hover{background:#2a3040}.panel-dark .pcard.on{background:#1e2438;border-color:#5e81ff}.panel-dark .picon{background:#2a3040}.panel-dark .pcard.on .picon{background:#1e2448}.panel-dark .plbl{color:#d0d5dd}.panel-dark .paddr{color:#6b7280}.panel-dark .pedit:hover{background:#2a3040}.panel-dark .pdel:hover{background:#401a1a}.panel-dark .pdiv{background:#2a3040}.panel-dark .ilbl{color:#6b7280}.panel-dark .iput{border-color:#3a4150;background:rgba(20,25,35,.6);color:#d0d5dd}.panel-dark .iput:focus{border-color:#5e81ff}.panel-dark .pmain{background:rgba(30,35,45,.88);box-shadow:0 1px 3px rgba(0,0,0,.25)}.panel-dark .ptool{border-bottom-color:rgba(255,255,255,.06);background:rgba(25,30,38,.75)}.panel-dark .turl{background:rgba(20,25,35,.6);color:#6b7280}.panel-dark .turl span{color:#7aa2f7}.panel-dark .tbtn:hover{background:#2a3040}.panel-dark #panel-frame{background:#181c26}.panel-dark .phold{background:#181c26}.panel-dark .phico{opacity:.18}.panel-dark .phtxt{color:#555d70}.panel-dark .pload{background:rgba(25,30,38,.9);color:#7aa2f7}.panel-dark .pspin{border-color:#2a3050;border-top-color:#7aa2f7}.panel-dark .perr{background:#1a1512}
+</style>
+
+<div class="panel-root">
+  <div class="panel-header">
+    <h2 style="margin:0"><%:Device Panel%></h2>
+    <div class="sub"><%:Access device web interfaces from this router%></div>
+  </div>
+
+  <div id="panel-grid">
+    <div id="panel-sidebar">
+      <div class="stitle">
+        <span><%:Devices%></span>
+        <button class="padd" id="panel-add-btn" title="<%:Add Device%>">+</button>
+      </div>
+      <div id="preset-list"><span style="font-size:12px;color:#b0b8c8"><%:Loading…%></span></div>
+      <div class="pdiv"></div>
+      <div class="igrp">
+        <label class="ilbl"><%:Address%></label>
+        <input type="text" id="panel-addr" class="iput" placeholder="192.168.1.1" autocomplete="off"/>
+      </div>
+      <div class="igrp">
+        <label class="ilbl"><%:Port%></label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="panel-port" class="iput" min="1" max="65535" value="80" style="width:80px;flex:none"/>
+          <button class="cbi-button cbi-button-add" id="panel-connect-btn">&#9654; <%:Connect%></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pmain">
+      <div class="ptool">
+        <button class="ptoggle" id="panel-toggle" title="<%:Toggle sidebar%>">&#9664;</button>
+        <div class="turl" id="panel-urlbar"><%:Enter an address and port to connect%></div>
+        <button class="tbtn" id="panel-refresh-btn" title="<%:Refresh%>" disabled>&#8635;</button>
+        <button class="tbtn" id="panel-newtab-btn" title="<%:Open in new tab%>" disabled>&#8599;</button>
+        <button class="tbtn" id="panel-fs-btn" title="<%:Fullscreen%>" disabled>&#9974;</button>
+      </div>
+      <div class="iwrap">
+        <iframe id="panel-frame" style="display:none"></iframe>
+        <div class="phold" id="panel-placeholder">
+          <div class="phico">&#127758;</div>
+          <div class="phtxt"><%:Click a device or enter address to connect%></div>
+        </div>
+        <div class="pload" id="panel-loading" style="display:none">
+          <div class="pspin"></div><%:Connecting…%>
+        </div>
+        <div class="perr" id="panel-error" style="display:none">
+          <div class="perri">&#9888;</div>
+          <div class="perm" id="panel-err-msg"></div>
+          <button class="cbi-button cbi-button-add" style="margin-top:4px" id="panel-err-dismiss"><%:Dismiss%></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="panel-modal" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:rgba(0,0,0,.45)">
+  <div style="background:#fff;border-radius:10px;padding:24px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+    <div id="modal-title" style="font-size:16px;font-weight:600;margin-bottom:16px"></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+	/* Detect LuCI dark theme */
+	var body = document.body;
+	var bg = window.getComputedStyle(body).backgroundColor;
+	/* Dark theme: rgb values all < 128 (e.g. #1a1a2e) */
+	if (bg && /rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)/.test(bg)) {
+		var m = bg.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+		if (m && parseInt(m[1]) < 128 && parseInt(m[2]) < 128 && parseInt(m[3]) < 128) {
+			document.querySelector('.panel-root').classList.add('panel-dark');
+		}
+	}
+
+	var BASE = window.location.pathname.replace(/\/admin\/panel.*$/, '') + '/admin/panel';
+
+	/* i18n strings from server-side template */
+	var I18N = {
+		unnamed: '<%:Unnamed%>',
+		notConfigured: '<%:Not configured%>',
+		noDevices: '<%:No devices. Click + to add one.%>',
+		editDevice: '<%:Edit Device%>',
+		addDevice: '<%:Add Device%>',
+		label: '<%:Label%>',
+		deviceName: '<%:Device name%>',
+		address: '<%:Address%>',
+		port: '<%:Port%>',
+		cancel: '<%:Cancel%>',
+		save: '<%:Save%>',
+		labelRequired: '<%:Label is required%>',
+		invalidPort: '<%:Invalid port%>',
+		saveFailed: '<%:Save failed%>',
+		addFailed: '<%:Add failed%>',
+		deleteDevice: '<%:Delete device%>',
+		deleteFailed: '<%:Delete failed%>',
+		pleaseEnterAddr: '<%:Please enter a target address%>',
+		loadFailed: '<%:Load failed%>',
+		reconnect: '<%:Reconnect%>',
+		edit: '<%:Edit%>',
+		delete: '<%:Delete%>',
+		failedLoadMsg: '<%:Failed to load. Check address and port.%>'
+	};
+
+	function $(id) { return document.getElementById(id); }
+	function escHtml(s) {
+		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+	}
+
+	function apiSave(action, data) {
+		return fetch(BASE + '/save', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(Object.assign({ action: action }, data))
+		}).then(function(r){
+			if (!r.ok) { alert(I18N.saveFailed + ': HTTP ' + r.status); return {success:false, error:'HTTP '+r.status}; }
+			return r.json();
+		});
+	}
+
+	function apiDelete(section) {
+		return fetch(BASE + '/delete?section=' + encodeURIComponent(section), {
+			method: 'POST'
+		}).then(function(r){ return r.json(); });
+	}
+
+	var DEVICES   = [];
+	var COLLAPSED = false;
+	var CUR_ADDR  = '', CUR_PORT = '80', IFRAME_READY = false;
+
+	function renderCards() {
+		var list = $('preset-list');
+		if (!list) return;
+		if (DEVICES.length === 0) {
+			list.innerHTML = '<span style="font-size:12px;color:#b0b8c8">' + I18N.noDevices + '</span>';
+			return;
+		}
+		list.innerHTML = '';
+		DEVICES.forEach(function(d, idx) {
+			var card = document.createElement('div');
+			card.className = 'pcard';
+			card.innerHTML =
+				'<div class="picon">&#128274;</div>' +
+				'<div class="pinfo">' +
+					'<div class="plbl">' + escHtml(d.label || I18N.unnamed) + '</div>' +
+					'<div class="paddr">' + escHtml(d.address || I18N.notConfigured)
+						+ (d.port && d.port !== '80' ? ':' + escHtml(d.port) : '') + '</div>' +
+				'</div>' +
+				'<div class="pact">' +
+					'<span class="pedit" title="' + I18N.edit + '">&#9998;</span>' +
+					'<span class="pdel" title="' + I18N.delete + '">&#10006;</span>' +
+				'</div>';
+			card.addEventListener('click', function(ev) {
+				if (ev.target.classList.contains('pedit') || ev.target.classList.contains('pdel')) return;
+				if (!d.address) { editDevice(d); return; }
+				$('panel-addr').value = d.address;
+				$('panel-port').value = d.port || '80';
+				document.querySelectorAll('.pcard').forEach(function(c, i){ c.classList.toggle('on', i === idx); });
+				loadPage();
+			});
+			card.querySelector('.pedit').addEventListener('click', function(ev){ ev.stopPropagation(); editDevice(d); });
+			card.querySelector('.pdel').addEventListener('click', function(ev){ ev.stopPropagation(); delDevice(d); });
+			list.appendChild(card);
+		});
+	}
+
+	function showModal(title, html) {
+		$('modal-title').textContent = title;
+		$('modal-body').innerHTML = html;
+		$('panel-modal').style.display = 'flex';
+	}
+	function hideModal() { $('panel-modal').style.display = 'none'; }
+
+	function editDevice(dev) {
+		var isEdit = !!dev;
+		showModal(isEdit ? I18N.editDevice : I18N.addDevice,
+			'<div style="margin-bottom:12px"><label style="display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:4px">' + I18N.label + '</label>' +
+			'<input type="text" id="e-label" class="iput" value="' + escHtml(isEdit ? (dev.label||'') : '') + '" placeholder="' + I18N.deviceName + '"/></div>' +
+			'<div style="margin-bottom:12px"><label style="display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:4px">' + I18N.address + '</label>' +
+			'<input type="text" id="e-addr" class="iput" value="' + escHtml(isEdit ? (dev.address||'') : '') + '" placeholder="192.168.1.1"/></div>' +
+			'<div style="margin-bottom:16px"><label style="display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:4px">' + I18N.port + '</label>' +
+			'<input type="number" id="e-port" class="iput" min="1" max="65535" value="' + (isEdit ? (dev.port||'80') : '80') + '"/></div>' +
+			'<div style="text-align:right;display:flex;gap:6px;justify-content:flex-end">' +
+			'<button class="cbi-button" id="e-cancel">' + I18N.cancel + '</button>' +
+			'<button class="cbi-button cbi-button-add" id="e-save">' + I18N.save + '</button></div>'
+		);
+		$('e-cancel').addEventListener('click', hideModal);
+		$('e-save').addEventListener('click', function() {
+			var label = ($('e-label').value || '').trim();
+			var addr  = ($('e-addr').value  || '').trim();
+			var port  = ($('e-port').value  || '80').trim();
+			if (!label) { alert(I18N.labelRequired); return; }
+			var pn = parseInt(port, 10);
+			if (isNaN(pn) || pn < 1 || pn > 65535) { alert(I18N.invalidPort); return; }
+
+			var data = { values: { label: label, address: addr, port: port } };
+
+			if (isEdit) {
+				data.section = dev.id;
+				apiSave('update', data).then(function(res){
+					if (res.success) { hideModal(); loadData(); }
+					else { alert(I18N.saveFailed + ': ' + (res.error || 'unknown')); }
+				}).catch(function(e){ alert(I18N.saveFailed + ': ' + e.message); });
+			} else {
+				apiSave('add', data).then(function(res){
+					if (res.success) { hideModal(); loadData(); }
+					else { alert(I18N.addFailed + ': ' + (res.error || 'unknown')); }
+				}).catch(function(e){ alert(I18N.addFailed + ': ' + e.message); });
+			}
+		});
+	}
+
+	function delDevice(dev) {
+		if (!confirm(I18N.deleteDevice + ' "' + (dev.label || '') + '"？')) return;
+		apiDelete(dev.id).then(function(res){
+			if (res.success) loadData();
+			else alert(I18N.deleteFailed + ': ' + (res.error || 'unknown'));
+		}).catch(function(e){ alert(I18N.deleteFailed + ': ' + e.message); });
+	}
+
+	function toggleSidebar() {
+		COLLAPSED = !COLLAPSED;
+		var side = $('panel-sidebar'), grid = $('panel-grid'), tog = $('panel-toggle');
+		if (!side || !grid) return;
+		if (COLLAPSED) {
+			side.style.display = 'none';
+			grid.style.gridTemplateColumns = '1fr';
+			tog.innerHTML = '&#9654;';
+		} else {
+			side.style.display = '';
+			grid.style.gridTemplateColumns = '260px 1fr';
+			tog.innerHTML = '&#9664;';
+		}
+		apiSave('set', { section: 'general', values: { sidebar_collapsed: COLLAPSED ? '1' : '0' } })
+			.catch(function(){});
+	}
+
+	function loadPage() {
+		var addr = ($('panel-addr').value || '').trim();
+		var port = ($('panel-port').value || '80').trim();
+		if (!addr) { alert(I18N.pleaseEnterAddr); return; }
+		var pn = parseInt(port, 10);
+		if (isNaN(pn) || pn < 1 || pn > 65535) { alert(I18N.invalidPort); return; }
+		CUR_ADDR = addr; CUR_PORT = port; IFRAME_READY = false;
+		var url = 'http://' + addr + ':' + port;
+		var f = $('panel-frame');
+		f.style.display = 'block'; f.src = url;
+		$('panel-urlbar').innerHTML = 'URL: <span>' + url + '</span>';
+		$('panel-connect-btn').innerHTML = '&#9654; ' + I18N.reconnect;
+		['panel-refresh-btn','panel-newtab-btn','panel-fs-btn'].forEach(function(id){ $(id).disabled = false; });
+		$('panel-placeholder').style.display = 'none';
+		$('panel-loading').style.display = 'flex';
+		$('panel-error').style.display = 'none';
+		document.querySelectorAll('.pcard').forEach(function(c){ c.classList.remove('on'); });
+	}
+
+	function loadData() {
+		fetch(BASE + '/get_config')
+			.then(function(r){ return r.json(); })
+			.then(function(data) {
+				var vals = data && data.values || {};
+				DEVICES = [];
+				for (var key in vals) {
+					if (vals[key] && vals[key]['.type'] === 'device') {
+						DEVICES.push({
+							id: key,
+							label: vals[key].label || '',
+							address: vals[key].address || '',
+							port: vals[key].port || '80'
+						});
+					}
+				}
+				var gen = vals.general || {};
+				COLLAPSED = (gen.sidebar_collapsed === '1');
+				renderCards();
+				var side = $('panel-sidebar'), grid = $('panel-grid'), tog = $('panel-toggle');
+				if (COLLAPSED) {
+					if (side) side.style.display = 'none';
+					if (grid) grid.style.gridTemplateColumns = '1fr';
+					if (tog) tog.innerHTML = '&#9654;';
+				} else {
+				if (side) side.style.display = '';
+				if (grid) grid.style.gridTemplateColumns = '260px 1fr';
+				if (tog) tog.innerHTML = '&#9664;';
+			}
+			})
+			.catch(function(err){
+				$('preset-list').innerHTML = '<span style="font-size:12px;color:#c0392b">' + I18N.loadFailed + ': ' + (err && err.message || err) + '</span>';
+			});
+	}
+
+	$('panel-toggle').addEventListener('click', toggleSidebar);
+	$('panel-add-btn').addEventListener('click', function(){ editDevice(null); });
+	$('panel-connect-btn').addEventListener('click', loadPage);
+	$('panel-refresh-btn').addEventListener('click', function(){
+		if (!IFRAME_READY) return;
+		$('panel-loading').style.display = 'flex';
+		$('panel-frame').style.display = 'none';
+		$('panel-frame').src = 'http://' + CUR_ADDR + ':' + CUR_PORT;
+	});
+	$('panel-newtab-btn').addEventListener('click', function(){
+		window.open('http://' + CUR_ADDR + ':' + CUR_PORT, '_blank');
+	});
+	$('panel-fs-btn').addEventListener('click', function(){
+		var f = $('panel-frame');
+		if (document.fullscreenElement) document.exitFullscreen();
+		else f.requestFullscreen().catch(function(){});
+	});
+	$('panel-err-dismiss').addEventListener('click', function(){
+		$('panel-error').style.display = 'none';
+	});
+	$('panel-frame').addEventListener('load', function(){
+		IFRAME_READY = true;
+		$('panel-loading').style.display = 'none';
+	});
+	$('panel-frame').addEventListener('error', function(){
+		IFRAME_READY = true;
+		$('panel-loading').style.display = 'none';
+		$('panel-err-msg').textContent = I18N.failedLoadMsg;
+		$('panel-error').style.display = 'flex';
+	});
+	$('panel-modal').addEventListener('click', function(ev){
+		if (ev.target === $('panel-modal')) hideModal();
+	});
+
+	loadData();
+})();
+</script>
+
+<%+footer%>
